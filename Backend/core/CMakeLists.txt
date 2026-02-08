@@ -7,6 +7,8 @@ add_library(core STATIC library.cpp
         Road.cpp
         Road.h
         Network.cpp
-        Network.h)
+        Network.h
+        SpeedZone.cpp
+        SpeedZone.h)
 
 target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
