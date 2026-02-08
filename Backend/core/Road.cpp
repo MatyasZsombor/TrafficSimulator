@@ -4,57 +4,88 @@
 
 #include "Road.h"
 
-#include <iostream>
+#include <complex>
 #include <numeric>
 
-Road::Road(const int id, const double length, const int cellCount, const double maxDensity, const double maxSpeed) {
-    _id = id;
+double Road::godunovFlux(const double densityL, const double densityR) const {
+    const double fluxL = greenShieldFlux(densityL);
+    const double fluxR = greenShieldFlux(densityR);
 
-    _length = length;
-    _cellCount = cellCount;
-    _dx = _length / _cellCount;
+    return densityL <= densityR ? std::min(fluxL, fluxR) : std::max(fluxL, fluxR);
+}
 
-    _maxDensity = maxDensity;
-    _maxSpeed = maxSpeed;
-    _maxFlow = maxSpeed * maxDensity / 4;
+double Road::densityFromFlow(const double flow) const {
+    const double discriminator = 1.0 - flow / maxFlow_;
 
-    _density = std::vector(_cellCount, 0.0);
+    if (discriminator < 0) {
+        return maxDensity_ / 2.0;
+    }
+
+    return 0.5 * maxDensity_ * (1.0 - std::sqrt(discriminator));
+}
+
+double Road::greenShieldFlux(const double density) const {
+    return density * maxSpeed_ * (1.0 - density / maxDensity_);
+}
+
+Road::Road(const int id, const double length, const int cellCount, const double maxDensity, const double maxSpeed, const double inflow) {
+    id_ = id;
+
+    length_ = length;
+    cellCount_ = cellCount;
+    dx_ = length_ / cellCount_;
+
+    maxDensity_ = maxDensity;
+    maxSpeed_ = maxSpeed;
+    maxFlow_ = maxSpeed * maxDensity / 4;
+
+    density_ = std::vector(cellCount_, 0.0);
+
+    inflow_ = inflow;
+}
+
+double Road::maxSpeed() const {
+    return maxSpeed_;
+}
+
+double Road::dx() const {
+    return dx_;
 }
 
 void Road::init(const std::vector<double> &density) {
-    for (int i = 0; i < _cellCount; i++) {
-        _density[i] = density[i];
+    for (int i = 0; i < cellCount_; i++) {
+        density_[i] = density[i];
     }
 }
 
 double Road::averageDensity() const {
-    return std::reduce(_density.begin(), _density.end()) / _cellCount;
-}
-
-double Road::totalSpeed(const double density) const {
-    return _maxSpeed * (1 - density / _maxDensity);
+    return std::reduce(density_.begin(), density_.end()) / cellCount_;
 }
 
 std::vector<double> Road::flux() const {
-    std::vector<double> flux;
-    flux.reserve(_cellCount);
+    std::vector<double> flux(cellCount_ + 1);
 
-    for (int i = 0; i < _cellCount; i++) {
-        flux.push_back(totalSpeed(_density[i]) * _density[i]);
+    const double densityIn = densityFromFlow(inflow_);
+    flux[0] = godunovFlux(densityIn, density_[0]);
+
+    for (int i = 0; i < cellCount_ - 1; i++) {
+        flux[i + 1] = godunovFlux(density_[i], density_[i + 1]);
     }
+
+    constexpr double densityOut = 0.0;
+    flux[cellCount_] = godunovFlux(density_[cellCount_ - 1], densityOut);
 
     return flux;
 }
 
-void Road::print() const {
-    std::cout << "Road " << _id << ":" << std::endl;
-    std::cout << "Cell Count: " << _cellCount << std::endl;
-    std::cout << "Max Density: " << _maxDensity << std::endl;
-    std::cout << "Max Speed: " << _maxSpeed << std::endl;
-    std::cout << "Max Flow: " << _maxFlow << std::endl << std::endl;
+void Road::update(const double dt) {
+    const auto f = flux();
 
-    std::cout << "Density: " << std::endl;
-    for (int i = 0; i < _cellCount; i++) {
-        std::cout << _density[i] << std::endl;
+    std::vector<double> newDensity(cellCount_);
+
+    for (int i = 0; i < cellCount_; i++) {
+        newDensity[i] = density_[i] - dt / dx_ * (f[i + 1] - f[i]);
     }
+
+    density_ = newDensity;
 }

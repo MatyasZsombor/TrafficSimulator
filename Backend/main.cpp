@@ -1,6 +1,8 @@
+#include <fstream>
 #include <iostream>
-#include <ostream>
+#include <random>
 
+#include "Network.h"
 #include "core/Road.h"
 
 
@@ -17,23 +19,45 @@ std::vector<double> gradient(double start, double end, int n) {
     return result;
 }
 
+std::vector<double> randomInitialDensity(const int cellCount, double const maxDensity) {
+    std::vector<double> density(cellCount);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution dis(0.01 * maxDensity, 0.05 * maxDensity);
+
+    for (int i = 0; i < cellCount; i++) {
+        density[i] = dis(gen);
+    }
+
+    return density;
+}
 
 int main() {
-    constexpr auto length = 500;
-    constexpr auto cellCount = 50;
-    constexpr auto maxDensity = 100;
+    std::ofstream outFile("densities.txt");
 
-    auto road = Road(1, length, cellCount, maxDensity, 100);
-    const auto density = gradient(0.2 * maxDensity, 0.8 * maxDensity, cellCount);
+    if (!outFile) {
+        std::cerr << "Error opening file!" << std::endl;
+        return 1;
+    }
+
+    constexpr auto length = 1000;
+    constexpr auto cellCount = 100;
+    constexpr auto maxDensity = 0.12;
+
+    auto road = Road(1, length, cellCount, maxDensity, 30, 1.0);
+    const auto density = randomInitialDensity(cellCount, maxDensity);
 
     road.init(density);
-    road.print();
-    std::cout << std::endl << "Avg density: " << road.averageDensity() << std::endl << std::endl;
 
-    const auto flux = road.flux();
+    std::vector<Road> roads;
+    roads.push_back(road);
 
-    std::cout << "Flux: " << std::endl;
-    for (auto i = 0; i < cellCount; i++) {
-        std::cout << flux[i] << std::endl;
+    Network network(roads);
+
+    for (auto i = 0; i < 1000; i++) {
+        network.update();
+        outFile << network;
     }
+
+    outFile.close();
 }
